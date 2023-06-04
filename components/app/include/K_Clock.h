@@ -1,3 +1,5 @@
+
+#pragma once
 /**
  ******************************************************************************
  * @file           user.h
@@ -29,6 +31,8 @@ extern "C" {
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/event_groups.h"
+
 #include "esp_timer.h"
 #include "math.h"
 
@@ -136,33 +140,35 @@ class K_clock
 private:
   /* data */
 
+  DendoStepper step1;
+
   void wifiConnect(void);
   void wifiConnect(uint8_t* ssid, uint8_t* password);
 
 
-
   static void sntpcallback(struct timeval *tv);
-  static esp_err_t event_handler(void *ctx, system_event_t *event);
-  static esp_err_t sntpInit(void);
-  static void wifi_event_connect_handle(void* event_handler_arg,esp_event_base_t event_base,int32_t event_id,void* event_data);
-  static void wifi_event_disconnect_handle(void* event_handler_arg,esp_event_base_t event_base,int32_t event_id,void* event_data);
-  static uint8_t weatherCodeSwitch(uint8_t weatherCode);
-
-  static uint8_t getTimeHour(void);
-  static uint8_t getWeatherCode(void);
-  static void weatherCodeParse(char* str, Weather_t* weather);
+  static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
+  static esp_err_t esp_event_handler(void *ctx, system_event_t *event);
 
 public:
+
+ 
   K_clock();
   ~K_clock();
 
-  esp_err_t returnToZero(void);
-  void init(void);
-  void motorInit(void);
- 
-  
 
-  static void run(uint8_t num,int32_t clockSteps);
+  void init(void);
+  esp_err_t sntpInit(void);
+  void motorInit(void);
+  uint8_t getTimeHour(void);
+  uint8_t getWeatherCode(void);
+  void weatherCodeParse(char* str, Weather_t* weather);
+  uint8_t weatherCodeSwitch(uint8_t weatherCode);
+  void setupdateFlag(uint8_t flag);
+  uint8_t getupdateFlag(void);
+  esp_err_t returnToZero(void);
+  void run(uint8_t num,int32_t clockSteps);
+  void disable(void);
 };
 
 

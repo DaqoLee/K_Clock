@@ -26,50 +26,88 @@
 
 K_clock Clock1;
 
+EventGroupHandle_t clock_event_group;
 
 void ButtonTask(void *arg)
 {
     static int i = 0;
+    Button_init(10);
     while (1)
     {
+
+        Button_process();
         /* code */
        // printf("SendTask: i=%d\n",i++);
-        if(i<100)
+        if(Button_getItemData(BUTTON_USERBTN)->pressedJump)
         {
-
+            xEventGroupSetBits(clock_event_group, BIT1);
+            printf("BUTTON_USERBTN pressedJump\n");
         }
-        printf("ButtonTask\n");
-        vTaskDelay(1000/portTICK_PERIOD_MS);
+       // printf("ButtonTask\n");
+        vTaskDelay(10/portTICK_PERIOD_MS);
     }
     
 }
 
 void ClockTask(void *arg)
 {
-   
+    EventBits_t uxBits;
+    uint8_t count = 0;
+
+   Clock1.init();
     while (1)
     {
-        /* code */
-        printf("ClockTask\n");
-        vTaskDelay(1000/portTICK_PERIOD_MS);
+
+
+        uxBits = xEventGroupWaitBits(
+                       clock_event_group,
+                       BIT0|BIT1,
+                       pdTRUE,
+                       pdFALSE,
+                       portMAX_DELAY );
+
+        printf("getupdateFlag \n");
+
+
+        // if(Clock1.getupdateFlag())
+        // {
+        //    // Clock1.getTimeHour();
+        //    // Clock1.run(24, Clock1.getTimeHour());
+        //     //printf("ClockTask Hour %d \n",Clock1.getWeatherCode());
+        //     Clock1.setupdateFlag(0);
+        // }
+       
+      if(uxBits & BIT0)
+      {
+        Clock1.run(24, count++);
+       // xEventGroupClearBits(wifi_event_group, BIT0);
+        printf("BIT0\n");
+        
+      }
+      else if (uxBits & BIT1)
+      {
+        printf("BIT1\n");
+        printf("getWeatherCode %d \n",Clock1.getWeatherCode());
+      }
+        vTaskDelay(10/portTICK_PERIOD_MS);
     }
     
 }
 
-
 extern "C" void app_main(void)
 {
-    Clock1.init();
+    nvs_flash_init();
+    clock_event_group = xEventGroupCreate();
     
-
-    xTaskCreate(ButtonTask, "ButtonTask", 2048, NULL, 1, NULL);
-    xTaskCreate(ClockTask, "ClockTask", 2048, NULL, 1, NULL);
-    while (true)
-	 {
-
-        //Clock1.getWeatherCode();
-        vTaskDelay(3000 / portTICK_PERIOD_MS);
-
+    if (clock_event_group != NULL)
+    {
+      xTaskCreate(ButtonTask, "ButtonTask", 2048, NULL, 1, NULL);
+      xTaskCreate(ClockTask, "ClockTask", 4096, NULL, 1, NULL);
+     // vTaskStartScheduler();
+    }
+    else
+    {
+        
     }
 }
 

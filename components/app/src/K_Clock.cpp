@@ -33,7 +33,10 @@
 
 /* Private constants ---------------------------------------------------------*/
 static const char *CLOCK_TAG = "K_Clock";
- DendoStepper step1;
+
+extern EventGroupHandle_t clock_event_group;
+#define WIFI_CONNECTED_BIT BIT0
+#define WIFI_FAIL_BIT      BIT1
 /* Private variables ---------------------------------------------------------*/
 
 /* Private macro -------------------------------------------------------------*/
@@ -54,43 +57,56 @@ K_clock::~K_clock()
 
 /* Private functions ---------------------------------------------------------*/
 
-void K_clock::wifi_event_connect_handle(void* event_handler_arg,esp_event_base_t event_base,int32_t event_id,void* event_data)
+void K_clock:: wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
 {
-    	/*获取事件数据*/
-	wifi_event_sta_connected_t* data = (wifi_event_sta_connected_t*)event_data;
+	if(event_base == WIFI_EVENT)
+    {
+		wifi_event_sta_connected_t *wifi_sta_event = (wifi_event_sta_connected_t*) event_data;
+		switch(event_id)
+        {
+			case WIFI_EVENT_STA_START:       
+				ESP_LOGI(CLOCK_TAG, "connect to AP......");
+				esp_wifi_connect();
+				break;
 
-	printf("Connected to the Wifi Successful & Tiggle Special Event\n");
-	printf("Event_base:%s\n",event_base);
-	printf("Event Id:%d\n",event_id);
-	printf("Wifi SSID:%.13s\n" , data->ssid);
-	printf("Wifi Channel:%d\n" , data->channel);
+			case WIFI_EVENT_STA_CONNECTED:
+                ESP_LOGI(CLOCK_TAG,"Connected to the Wifi Successful & Tiggle Special Event\n");
+                ESP_LOGI(CLOCK_TAG,"Event_base:%s\n",event_base);
+                ESP_LOGI(CLOCK_TAG,"Event Id:%d\n",event_id);
+                ESP_LOGI(CLOCK_TAG,"Wifi SSID:%.13s\n" , wifi_sta_event->ssid);
+                ESP_LOGI(CLOCK_TAG,"Wifi Channel:%d\n" , wifi_sta_event->channel);
+				break;
 
-}
+			case WIFI_EVENT_STA_DISCONNECTED:
+                ESP_LOGI(CLOCK_TAG, "retry to connect to AP...... ");
+                esp_wifi_connect();
+				break;
 
-void K_clock::wifi_event_disconnect_handle(void* event_handler_arg,esp_event_base_t event_base,int32_t event_id,void* event_data)
-{
-	wifi_event_sta_disconnected_t* eventdata = (wifi_event_sta_disconnected_t*)event_data;
-	if(eventdata->reason == WIFI_REASON_NO_AP_FOUND)
-	{
-		printf("Can't Found The AP\n");
-		vTaskDelay(5000/portTICK_PERIOD_MS);
+			default:
+				break;           
+		}
+	}else if(event_base ==  IP_EVENT)
+    {
+		ip_event_got_ip_t* ip_event = (ip_event_got_ip_t*) event_data;
+		if(event_id == IP_EVENT_STA_GOT_IP)
+        {
+			ESP_LOGI(CLOCK_TAG, "got ip:" IPSTR, IP2STR(&ip_event->ip_info.ip));
+
+		}
 	}
-	esp_wifi_connect();
 }
 
-esp_err_t K_clock::event_handler(void *ctx, system_event_t *event)
+esp_err_t K_clock::esp_event_handler(void *ctx, system_event_t *event)
 {
     return ESP_OK;
 }
 
 
-//    uint8_t ssid[32];      /**< SSID of target AP. */
-//    uint8_t password[64];  /**< Password of target AP. */
+
 void K_clock::wifiConnect(void)
 {
-    nvs_flash_init();
     tcpip_adapter_init();
-    ESP_ERROR_CHECK( esp_event_loop_init(event_handler, NULL) );
+    ESP_ERROR_CHECK(esp_event_loop_init(esp_event_handler, NULL) );
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK( esp_wifi_init(&cfg) );
     ESP_ERROR_CHECK( esp_wifi_set_storage(WIFI_STORAGE_RAM) );
@@ -108,11 +124,10 @@ void K_clock::wifiConnect(void)
     ESP_ERROR_CHECK( esp_wifi_connect());
 
 
-    /*注册WIFI连接和断开连接事件处理函数*/
-    esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_STA_CONNECTED, wifi_event_connect_handle, NULL, NULL);
-    esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, wifi_event_disconnect_handle, NULL, NULL);
-
-	vTaskDelay(1000 / portTICK_PERIOD_MS);
+    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL));
+	ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL));
+    
+	ESP_LOGI(CLOCK_TAG, "wifi_init_sta finished.");
 
 }
 
@@ -144,19 +159,14 @@ void K_clock::sntpcallback(struct timeval *tv)
 {
 	if(sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED)
 	{
-		//printf("Sntp Auto Sync Finish\n");
-        //printf("Hour %d , weatherCode %d\n",getTimeHour(), getWeatherCode());
-        printf("Hour %d \n",getTimeHour());
-        run(24, getTimeHour());
-		//getTimeHour();
-		
+		 xEventGroupSetBits(clock_event_group, BIT0);
+	
 	}
 	else
 	{
 		printf("Sntp Auto Sync Fail\n");
 	}
 }
-
 
 esp_err_t K_clock::sntpInit(void)
 {
@@ -172,7 +182,7 @@ esp_err_t K_clock::sntpInit(void)
 	/*设置时区并获取系统时间*/
 	setenv("TZ", "CST-8", 1);
 	tzset();
-	while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED && retry < 50) {
+	while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED && retry < 10) {
 		retry++;;
 		vTaskDelay(500 / portTICK_PERIOD_MS);
 	}
@@ -181,7 +191,7 @@ esp_err_t K_clock::sntpInit(void)
     
 
 	/*输出校时结果*/
-	if(retry == 50)
+	if(retry == 10)
 	{
         ESP_LOGI(CLOCK_TAG,"SNTP Sync Time Out" );
 		return ESP_ERR_TIMEOUT;
@@ -350,13 +360,13 @@ void K_clock::weatherCodeParse(char* str ,  Weather_t* weather)
 		arrayItem = cJSON_GetObjectItem(root,"results");
 		//ESP_LOGE(HTTP_TAG, "Data IS json");
 		int arr_size = cJSON_GetArraySize(arrayItem);
-		ESP_LOGI(CLOCK_TAG, "root_arr_size: %d \n", arr_size);
+		//ESP_LOGI(CLOCK_TAG, "root_arr_size: %d \n", arr_size);
 		arr_item = arrayItem->child;
 		for(int i = 0; i < arr_size; i++)
 		{
 			subArray = cJSON_GetObjectItem(arr_item, "now");
 			int sub_array_size = cJSON_GetArraySize(subArray);
-			ESP_LOGI(CLOCK_TAG, "sub_arr_size: %d \n", sub_array_size);
+			//ESP_LOGI(CLOCK_TAG, "sub_arr_size: %d \n", sub_array_size);
 			//for(int j = 0; j < sub_array_size; j ++)
 			{
 				if(subArray->type == cJSON_Object)
@@ -364,13 +374,13 @@ void K_clock::weatherCodeParse(char* str ,  Weather_t* weather)
 					JsonCode =  cJSON_GetObjectItem(subArray, "code");
 					if(cJSON_IsString(JsonCode))
 					{
-						weather->code = JsonCode->valueint;
+						weather->code = atoi(JsonCode->valuestring);//((JsonCode->valuestring[0]-'0')*10 + (JsonCode->valuestring[1]-'0'));
 						ESP_LOGI(CLOCK_TAG, "code: %d \n", weather->code);
 
 					}					
 				}
 			}
-			ESP_LOGI(CLOCK_TAG, "Finish");
+			//ESP_LOGI(CLOCK_TAG, "Finish");
 		}
 		cJSON_Delete(root);
 	}
@@ -412,9 +422,9 @@ uint8_t K_clock::getWeatherCode(void)
             int data_read = esp_http_client_read_response(client, output_buffer, MAX_HTTP_OUTPUT_BUFFER);
             if (data_read >= 0) 
 			{
-                ESP_LOGI(CLOCK_TAG, "HTTP GET Status = %d, content_length = %d",
-                esp_http_client_get_status_code(client),
-                esp_http_client_get_content_length(client));
+                // ESP_LOGI(CLOCK_TAG, "HTTP GET Status = %d, content_length = %d",
+                // esp_http_client_get_status_code(client),
+                // esp_http_client_get_content_length(client));
                 printf("data:%s", output_buffer);
                 esp_http_client_close(client);	
                 weatherCodeParse(output_buffer, &Weather);
@@ -440,8 +450,8 @@ uint8_t K_clock::getTimeHour(void)
 
 	time(&now);						//获取系统时间s
 	localtime_r(&now, &timeinfo);	//将获取到的系统时间s转换为带有格式的timeinfo信息
-	// strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
-	// printf("System Time: %s\n" , strftime_buf);
+	strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
+	printf("System Time: %s\n" , strftime_buf);
     return timeinfo.tm_hour;
 }
 
@@ -452,17 +462,30 @@ void K_clock::run(uint8_t num,int32_t clockSteps)
 
 }
 
+void K_clock::disable(void)
+{
+
+    if(step1.getState() == IDLE)
+    {
+        step1.disableMotor();
+    }
+
+}
+
+
 void K_clock::init(void)
 {
     // gpio_set_direction(GPIO_NUM_4, GPIO_MODE_OUTPUT);
     // gpio_set_level(GPIO_NUM_4,1);
-
+   
     wifiConnect();
-    Button_init(10);
+   // Button_init(10);
     motorInit();
-    returnToZero();
+    // returnToZero();
+    vTaskDelay(5000 / portTICK_PERIOD_MS);
     sntpInit();
     vTaskDelay(2000 / portTICK_PERIOD_MS);
+    // sntpInit();
     printf("Hour %d , weatherCode %d\n",getTimeHour(), getWeatherCode());
     // getWeatherCode();
 }
