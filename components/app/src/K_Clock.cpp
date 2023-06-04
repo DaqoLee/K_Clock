@@ -105,6 +105,7 @@ esp_err_t K_clock::esp_event_handler(void *ctx, system_event_t *event)
 
 void K_clock::wifiConnect(void)
 {
+    ESP_ERROR_CHECK(nvs_flash_init());
     tcpip_adapter_init();
     ESP_ERROR_CHECK(esp_event_loop_init(esp_event_handler, NULL) );
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
@@ -479,13 +480,11 @@ void K_clock::init(void)
     // gpio_set_level(GPIO_NUM_4,1);
    
     wifiConnect();
-   // Button_init(10);
+    Button_init(10);
     motorInit();
-    // returnToZero();
-    vTaskDelay(5000 / portTICK_PERIOD_MS);
+    returnToZero();
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
     sntpInit();
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
-    // sntpInit();
     printf("Hour %d , weatherCode %d\n",getTimeHour(), getWeatherCode());
-    // getWeatherCode();
+
 }

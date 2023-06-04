@@ -52,13 +52,9 @@ void ButtonTask(void *arg)
 void ClockTask(void *arg)
 {
     EventBits_t uxBits;
-    uint8_t count = 0;
-
-   Clock1.init();
+    Clock1.init();
     while (1)
     {
-
-
         uxBits = xEventGroupWaitBits(
                        clock_event_group,
                        BIT0|BIT1,
@@ -66,21 +62,9 @@ void ClockTask(void *arg)
                        pdFALSE,
                        portMAX_DELAY );
 
-        printf("getupdateFlag \n");
-
-
-        // if(Clock1.getupdateFlag())
-        // {
-        //    // Clock1.getTimeHour();
-        //    // Clock1.run(24, Clock1.getTimeHour());
-        //     //printf("ClockTask Hour %d \n",Clock1.getWeatherCode());
-        //     Clock1.setupdateFlag(0);
-        // }
-       
       if(uxBits & BIT0)
       {
-        Clock1.run(24, count++);
-       // xEventGroupClearBits(wifi_event_group, BIT0);
+        Clock1.run(24, Clock1.getTimeHour());
         printf("BIT0\n");
         
       }
@@ -96,13 +80,13 @@ void ClockTask(void *arg)
 
 extern "C" void app_main(void)
 {
-    nvs_flash_init();
+   // ESP_ERROR_CHECK(nvs_flash_init());
+
     clock_event_group = xEventGroupCreate();
-    
     if (clock_event_group != NULL)
-    {
-      xTaskCreate(ButtonTask, "ButtonTask", 2048, NULL, 1, NULL);
+    {    
       xTaskCreate(ClockTask, "ClockTask", 4096, NULL, 1, NULL);
+      xTaskCreate(ButtonTask, "ButtonTask", 2048, NULL, 1, NULL);
      // vTaskStartScheduler();
     }
     else
