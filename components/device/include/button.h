@@ -25,21 +25,19 @@ extern "C" {
 /* Defines -------------------------------------------------------------------*/
 #define BUTTON_USERBTN_PIN           		22
 #define BUTTON_USERBTN_PIN2           	19
-//#define BUTTON_USERBTN_PIN3           	4
+
 /* Exported types ------------------------------------------------------------*/
 typedef enum
 {
   BUTTON_PIN_USERBTN = 0,
-	BUTTON_PIN2,
-	BUTTON_PIN3,
+	BUTTON_PIN_RESTBTN,
   BUTTON_PINLIST_MAX
 } Button_PinList_t;
 
 typedef enum
 {
   BUTTON_USERBTN = 0,
-	BUTTON_USERBTN2, 
-	BUTTON_USERBTN3,
+	BUTTON_RESTBTN, 
   BUTTON_ITEM_MAX,
 } Button_Item_t;
 

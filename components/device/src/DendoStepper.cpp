@@ -75,10 +75,10 @@ void DendoStepper::init()
         .auto_reload = TIMER_AUTORELOAD_EN, // reload pls
         .divider = 80000000ULL / TIMER_F,   // ns resolution
     };
-
+    setMicrostepRes(conf.miStep);//Microstep resolution 16
     // calculate stepsPerRot
-    ctrl.stepsPerRot = (360.0 / conf.stepAngle) * conf.miStep;
-    setResolution(16);//Microstep resolution 16
+    ctrl.stepsPerRot = (360.0 / conf.stepAngle) * conf.miStep + 0.5;
+    
     STEP_LOGI("DendoStepper", "Steps per one rotation:%d", ctrl.stepsPerRot);
 
     if (conf.timer_group != TIMER_GROUP_MAX && conf.timer_idx != TIMER_MAX)
@@ -200,6 +200,13 @@ void DendoStepper::setStepsPerMm(uint16_t steps)
     ctrl.stepsPerMm = steps;
 }
 
+
+uint32_t DendoStepper::getStepsPerRot()
+{
+    return ctrl.stepsPerRot;
+}
+
+
 uint16_t DendoStepper::getStepsPerMm()
 {
     return ctrl.stepsPerMm;
@@ -279,9 +286,8 @@ void DendoStepper::setDir(bool state)
     ESP_ERROR_CHECK(gpio_set_level((gpio_num_t)conf.dirPin, state));
 }
 
-void DendoStepper::setResolution(uint8_t value)
+void DendoStepper::setMicrostepRes(uint8_t value)
 {
-    ctrl.Resolution = value;
 
     switch (value)
     {

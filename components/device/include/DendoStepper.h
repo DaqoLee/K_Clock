@@ -96,11 +96,10 @@ typedef struct
     float dec = 100;        // decceleration in rad*second^-2
     uint32_t accSteps = 0;
     uint32_t decSteps = 0;
-    uint8_t Resolution = 8;
     uint8_t status = DISABLED;
     bool dir = CW;
     bool runInfinite = false;
-    uint16_t stepsPerRot;    // steps per one revolution, 360/stepAngle * microstep
+    uint32_t stepsPerRot;    // steps per one revolution, 360/stepAngle * microstep
     uint16_t stepsPerMm = 0; /** Steps per one milimiter, if the motor is performing linear movement */
 } ctrl_var_t;
 
@@ -136,7 +135,7 @@ private:
     /** @brief sets Microstep resolution
      *  @param value 8 16 32 64
      */
-    void setResolution(uint8_t value);
+    void setMicrostepRes(uint8_t value);
 
     /** @brief static wrapper for ISR function
      *  @param _this DendoStepper* this pointer
@@ -224,6 +223,11 @@ public:
      */
     void setStepsPerMm(uint16_t steps);
 
+    /**
+     * @brief get steps per one revolution
+     *
+     */
+    uint32_t getStepsPerRot();
     /**
      * @brief get steps per 1mm settings
      *

@@ -133,13 +133,31 @@ typedef struct
 
 } Weather_t;
 
+/**
+ * @brief Configuration structure
+ */
+typedef struct
+{
+
+   wifi_config_t wifiConfig;
+   char* ntpUrl;
+   char* userKey;
+   char* location;
+   
+   gpio_num_t powerPin;
+   uint8_t pages;
+   uint16_t ntpInterval;
+
+   DendoStepper_config_t stepperConfig;
+        
+} Clock_config_t;
 
 
 class K_clock
 {
 private:
   /* data */
-
+  Clock_config_t conf;
   DendoStepper step1;
 
   void wifiConnect(void);
@@ -156,7 +174,7 @@ public:
   K_clock();
   ~K_clock();
 
-
+  void config(Clock_config_t *config);
   void init(void);
   esp_err_t sntpInit(void);
   void motorInit(void);
@@ -167,8 +185,11 @@ public:
   void setupdateFlag(uint8_t flag);
   uint8_t getupdateFlag(void);
   esp_err_t returnToZero(void);
-  void run(uint8_t num,int32_t clockSteps);
-  void disable(void);
+  void runPages(int16_t value);
+  void runPos(int16_t value);
+  void resetPos(void);
+  void powerON(void);
+  void powerOFF(void);
 };
 
 

@@ -15,28 +15,14 @@
 #include "K_Clock.h"
 
 /* Defines -------------------------------------------------------------------*/
-#define WIFI_SSID "HUAWEI-DFP"
-#define WIFI_PASSWORD "dianfengpai"
-#define NTP_URL		"ntp.aliyun.com"	//NTP服务器地址
 
-#define MAX_STEPS (68880)//(360/0.35)*16 68880  16400
-#define SNTP_INTERVAL (1) //SNTP同步周期设定:分钟
-
-
-#define MAX_HTTP_OUTPUT_BUFFER 1300
-#define HOST "api.seniverse.com"
-#define UserKey "Sq4f2lh5b3lLPTCWr"
-#define Location "guangzhou"
-#define Language "en"
 /* Private types -------------------------------------------------------------*/
 /* Private types -------------------------------------------------------------*/
 
 /* Private constants ---------------------------------------------------------*/
 static const char *CLOCK_TAG = "K_Clock";
-
 extern EventGroupHandle_t clock_event_group;
-#define WIFI_CONNECTED_BIT BIT0
-#define WIFI_FAIL_BIT      BIT1
+
 /* Private variables ---------------------------------------------------------*/
 
 /* Private macro -------------------------------------------------------------*/
@@ -113,14 +99,14 @@ void K_clock::wifiConnect(void)
     ESP_ERROR_CHECK( esp_wifi_set_storage(WIFI_STORAGE_RAM) );
     ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA) );
 
-    wifi_config_t sta_config = {
-        .sta = {
-             CONFIG_ESP_WIFI_SSID,
-             CONFIG_ESP_WIFI_PASSWORD,
-            .bssid_set = false,
-        }
-    };
-    ESP_ERROR_CHECK( esp_wifi_set_config(WIFI_IF_STA, &sta_config) );
+    // wifi_config_t sta_config = {
+    //     .sta = {
+    //          CONFIG_ESP_WIFI_SSID,
+    //          CONFIG_ESP_WIFI_PASSWORD,
+    //         .bssid_set = false,
+    //     }
+    // };
+    ESP_ERROR_CHECK( esp_wifi_set_config(WIFI_IF_STA, &conf.wifiConfig));
     ESP_ERROR_CHECK( esp_wifi_start() );
     ESP_ERROR_CHECK( esp_wifi_connect());
 
@@ -134,19 +120,20 @@ void K_clock::wifiConnect(void)
 
 void K_clock::motorInit(void)
 {
-    DendoStepper_config_t step1_cfg = {
-    .stepPin = 27,
-    .dirPin = 26,
-    .enPin = 25,
-    .ms1Pin = 14,
-    .ms2Pin = 12,
-    .timer_group = TIMER_GROUP_0,
-    .timer_idx = TIMER_1,
-    .miStep = MICROSTEP_32,
-    .stepAngle = 0.086};
+    // DendoStepper_config_t step1_cfg = {
+    // .stepPin = 27,
+    // .dirPin = 26,
+    // .enPin = 25,
+    // .ms1Pin = 14,
+    // .ms2Pin = 12,
+    // .timer_group = TIMER_GROUP_0,
+    // .timer_idx = TIMER_1,
+    // .miStep = MICROSTEP_16,
+    // .stepAngle = 0.086
+    // };
 
 
-    step1.config(&step1_cfg);
+    step1.config(&conf.stepperConfig);
 
 
     step1.init();
@@ -175,9 +162,9 @@ esp_err_t K_clock::sntpInit(void)
 
 	/*初始化SNTP并校时*/
 	sntp_setoperatingmode(SNTP_OPMODE_POLL);
-	sntp_setservername(0, NTP_URL);
+	sntp_setservername(0, conf.ntpUrl);
     sntp_set_time_sync_notification_cb(sntpcallback);
-    sntp_set_sync_interval(SNTP_INTERVAL*60000);
+    sntp_set_sync_interval(conf.ntpInterval*60000);
 	sntp_init();
 
 	/*设置时区并获取系统时间*/
@@ -213,7 +200,7 @@ esp_err_t K_clock::returnToZero(void)
    // step2.runPos(MAX_STEPS);
     ESP_LOGI(CLOCK_TAG, "Return to zero");
     Button_process();
-    while (!Button_getItemData(BUTTON_USERBTN2)->status && (step1.getPosition()< MAX_STEPS))
+    while (!Button_getItemData(BUTTON_RESTBTN)->status && (step1.getPosition()<= step1.getStepsPerRot()))
     {
         Button_process();
         step1.runPos(100);  
@@ -228,7 +215,7 @@ esp_err_t K_clock::returnToZero(void)
     step1.disableMotor();
     step1.setSpeed(1000, 100, 100);
     
-    if(step1.getPosition() < MAX_STEPS)
+    if(step1.getPosition() <= step1.getStepsPerRot())
     {
         step1.resetAbsolute();
         ESP_LOGI(CLOCK_TAG, "Return to zero");
@@ -391,10 +378,13 @@ void K_clock::weatherCodeParse(char* str ,  Weather_t* weather)
 uint8_t K_clock::getWeatherCode(void)
 {
     Weather_t Weather;
-    char output_buffer[MAX_HTTP_OUTPUT_BUFFER] = {0};   // Buffer to store response of http request
+    const uint16_t maxHttpBuff = 1300;
+    char output_buffer[maxHttpBuff] = {0};   // Buffer to store response of http request
     int content_length = 0;
     uint8_t errCode = 100;
-    static const char *URL ="http://api.seniverse.com/v3/weather/now.json?""key="UserKey"&location="Location"&language="Language"&unit=c";
+    char URL[200] = {0}; //="http://api.seniverse.com/v3/weather/now.json?""key="UserKey"&location="Location"&language="Language"&unit=c";
+    
+    sprintf(URL,"http://api.seniverse.com/v3/weather/now.json?key=%s&location=%s&language=en&unit=c",conf.userKey, conf.location);
     esp_http_client_config_t config = {
         .url = URL,
     };
@@ -420,7 +410,7 @@ uint8_t K_clock::getWeatherCode(void)
         } 
 		else
 		{
-            int data_read = esp_http_client_read_response(client, output_buffer, MAX_HTTP_OUTPUT_BUFFER);
+            int data_read = esp_http_client_read_response(client, output_buffer, maxHttpBuff);
             if (data_read >= 0) 
 			{
                 // ESP_LOGI(CLOCK_TAG, "HTTP GET Status = %d, content_length = %d",
@@ -456,29 +446,70 @@ uint8_t K_clock::getTimeHour(void)
     return timeinfo.tm_hour;
 }
 
-void K_clock::run(uint8_t num,int32_t clockSteps)
+void K_clock::runPages(int16_t value)
 {
+    uint16_t timeOut = 200;
+    int32_t steps = (step1.getStepsPerRot()/conf.pages)*value - step1.getPosition();
 
-    step1.runPos((MAX_STEPS/num)*clockSteps - step1.getPosition());  
-
-}
-
-void K_clock::disable(void)
-{
-
-    if(step1.getState() == IDLE)
+    if(value == 0|| steps < 0)
     {
-        step1.disableMotor();
+        returnToZero();
+    }
+    else
+    {
+        step1.runPos(steps); 
     }
 
+    while (step1.getState() != IDLE && timeOut--)
+    {
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+    }
+   // printf("timeOut: %d\n" , timeOut);
+    step1.disableMotor();
 }
+
+void K_clock::runPos(int16_t value)
+{
+    uint16_t timeOut = 200;
+    step1.runPos(value); 
+
+    while (step1.getState() != IDLE && timeOut--)
+    {
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+    }
+   // printf("timeOut: %d\n" , timeOut);
+    step1.disableMotor();
+}
+
+
+void K_clock::resetPos(void)
+{
+    step1.resetAbsolute();
+}
+
+
+void K_clock::powerON(void)
+{
+    gpio_set_direction(conf.powerPin , GPIO_MODE_OUTPUT);
+    gpio_set_level(conf.powerPin ,1);  
+}
+
+void K_clock::powerOFF(void)
+{
+    gpio_set_level(conf.powerPin ,0); 
+}
+
+
+void K_clock::config(Clock_config_t *config)
+{
+    memcpy(&conf, config, sizeof(conf));
+}
+
 
 
 void K_clock::init(void)
 {
-    // gpio_set_direction(GPIO_NUM_4, GPIO_MODE_OUTPUT);
-    // gpio_set_level(GPIO_NUM_4,1);
-   
+    powerON();
     wifiConnect();
     Button_init(10);
     motorInit();
