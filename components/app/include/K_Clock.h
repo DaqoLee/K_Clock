@@ -147,7 +147,8 @@ typedef struct
    gpio_num_t powerPin;
    uint8_t pages;
    uint16_t ntpInterval;
-
+   uint16_t speed;
+   uint16_t compensation;
    DendoStepper_config_t stepperConfig;
         
 } Clock_config_t;
@@ -178,7 +179,11 @@ public:
   void init(void);
   esp_err_t sntpInit(void);
   void motorInit(void);
+
   uint8_t getTimeHour(void);
+  uint8_t getTimeMin(void);
+  uint8_t getTimeSec(void);
+
   uint8_t getWeatherCode(void);
   void weatherCodeParse(char* str, Weather_t* weather);
   uint8_t weatherCodeSwitch(uint8_t weatherCode);
@@ -187,6 +192,7 @@ public:
   esp_err_t returnToZero(void);
   void runPages(int16_t value);
   void runPos(int16_t value);
+  void runInf(int16_t value);
   void resetPos(void);
   void powerON(void);
   void powerOFF(void);

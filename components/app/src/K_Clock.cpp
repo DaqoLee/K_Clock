@@ -40,53 +40,25 @@ K_clock::~K_clock()
 {
 }
 
-
-/* Private functions ---------------------------------------------------------*/
-
-void K_clock:: wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
+void K_clock::config(Clock_config_t *config)
 {
-	if(event_base == WIFI_EVENT)
-    {
-		wifi_event_sta_connected_t *wifi_sta_event = (wifi_event_sta_connected_t*) event_data;
-		switch(event_id)
-        {
-			case WIFI_EVENT_STA_START:       
-				ESP_LOGI(CLOCK_TAG, "connect to AP......");
-				esp_wifi_connect();
-				break;
-
-			case WIFI_EVENT_STA_CONNECTED:
-                ESP_LOGI(CLOCK_TAG,"Connected to the Wifi Successful & Tiggle Special Event\n");
-                ESP_LOGI(CLOCK_TAG,"Event_base:%s\n",event_base);
-                ESP_LOGI(CLOCK_TAG,"Event Id:%d\n",event_id);
-                ESP_LOGI(CLOCK_TAG,"Wifi SSID:%.13s\n" , wifi_sta_event->ssid);
-                ESP_LOGI(CLOCK_TAG,"Wifi Channel:%d\n" , wifi_sta_event->channel);
-				break;
-
-			case WIFI_EVENT_STA_DISCONNECTED:
-                ESP_LOGI(CLOCK_TAG, "retry to connect to AP...... ");
-                esp_wifi_connect();
-				break;
-
-			default:
-				break;           
-		}
-	}else if(event_base ==  IP_EVENT)
-    {
-		ip_event_got_ip_t* ip_event = (ip_event_got_ip_t*) event_data;
-		if(event_id == IP_EVENT_STA_GOT_IP)
-        {
-			ESP_LOGI(CLOCK_TAG, "got ip:" IPSTR, IP2STR(&ip_event->ip_info.ip));
-
-		}
-	}
+    memcpy(&conf, config, sizeof(conf));
 }
 
-esp_err_t K_clock::esp_event_handler(void *ctx, system_event_t *event)
-{
-    return ESP_OK;
-}
 
+
+void K_clock::init(void)
+{
+    powerON();
+    wifiConnect();
+    Button_init(10);
+    motorInit();
+    returnToZero();
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    sntpInit();
+    ESP_LOGI(CLOCK_TAG,"Hour %d , weatherCode %d\n",getTimeHour(), getWeatherCode());
+
+}
 
 
 void K_clock::wifiConnect(void)
@@ -138,23 +110,11 @@ void K_clock::motorInit(void)
 
     step1.init();
 
-    step1.setSpeed(1000, 100, 100);
+    step1.setSpeed(conf.speed, 100, 100);
     
 }
 
 
-void K_clock::sntpcallback(struct timeval *tv)
-{
-	if(sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED)
-	{
-		 xEventGroupSetBits(clock_event_group, BIT0);
-	
-	}
-	else
-	{
-		printf("Sntp Auto Sync Fail\n");
-	}
-}
 
 esp_err_t K_clock::sntpInit(void)
 {
@@ -191,42 +151,6 @@ esp_err_t K_clock::sntpInit(void)
 		return ESP_OK;
 	}
     
-}
-
-esp_err_t K_clock::returnToZero(void)
-{
-    step1.setSpeed(3000, 100, 100);
-    step1.resetAbsolute();
-   // step2.runPos(MAX_STEPS);
-    ESP_LOGI(CLOCK_TAG, "Return to zero");
-    Button_process();
-    while (!Button_getItemData(BUTTON_RESTBTN)->status && (step1.getPosition()<= step1.getStepsPerRot()))
-    {
-        Button_process();
-        step1.runPos(100);  
-        vTaskDelay(10 / portTICK_PERIOD_MS);
-        //ESP_LOGI(CLOCK_TAG, "Position:%lld\n",step2.getPosition());
-
-    } 
-
-    // ESP_LOGI(CLOCK_TAG, "Position:%lld\n",step2.getPosition());
-
-    step1.stop();
-    step1.disableMotor();
-    step1.setSpeed(1000, 100, 100);
-    
-    if(step1.getPosition() <= step1.getStepsPerRot())
-    {
-        step1.resetAbsolute();
-        ESP_LOGI(CLOCK_TAG, "Return to zero");
-        return ESP_OK;
-    }
-    else
-    {        
-        ESP_LOGI(CLOCK_TAG, "Cannot return to zero!!");
-        return ESP_ERR_TIMEOUT;
-    }
-
 }
 
 
@@ -416,7 +340,7 @@ uint8_t K_clock::getWeatherCode(void)
                 // ESP_LOGI(CLOCK_TAG, "HTTP GET Status = %d, content_length = %d",
                 // esp_http_client_get_status_code(client),
                 // esp_http_client_get_content_length(client));
-                printf("data:%s", output_buffer);
+                ESP_LOGI(CLOCK_TAG,"data:%s", output_buffer);
                 esp_http_client_close(client);	
                 weatherCodeParse(output_buffer, &Weather);
 				return weatherCodeSwitch(Weather.code);
@@ -442,49 +366,153 @@ uint8_t K_clock::getTimeHour(void)
 	time(&now);						//获取系统时间s
 	localtime_r(&now, &timeinfo);	//将获取到的系统时间s转换为带有格式的timeinfo信息
 	strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
-	printf("System Time: %s\n" , strftime_buf);
+	ESP_LOGI(CLOCK_TAG,"System Time: %s\n" , strftime_buf);
     return timeinfo.tm_hour;
+}
+
+uint8_t K_clock::getTimeMin(void)
+{
+	time_t now;
+	struct tm timeinfo;
+	char strftime_buf[64];
+
+	time(&now);						//获取系统时间s
+	localtime_r(&now, &timeinfo);	//将获取到的系统时间s转换为带有格式的timeinfo信息
+	strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
+	ESP_LOGI(CLOCK_TAG,"System Time: %s\n" , strftime_buf);
+    return timeinfo.tm_min;
+}
+
+uint8_t K_clock::getTimeSec(void)
+{
+	time_t now;
+	struct tm timeinfo;
+	char strftime_buf[64];
+
+	time(&now);						//获取系统时间s
+	localtime_r(&now, &timeinfo);	//将获取到的系统时间s转换为带有格式的timeinfo信息
+	strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
+	ESP_LOGI(CLOCK_TAG,"System Time: %s\n" , strftime_buf);
+    return timeinfo.tm_sec;
 }
 
 void K_clock::runPages(int16_t value)
 {
+    static uint16_t lastValue = 0;
     uint16_t timeOut = 200;
-    int32_t steps = (step1.getStepsPerRot()/conf.pages)*value - step1.getPosition();
-
-    if(value == 0|| steps < 0)
+    
+    if(lastValue != value)
     {
-        returnToZero();
+        int32_t steps = (step1.getStepsPerRot()/conf.pages)*value - step1.getPosition();
+
+        if(value == 0|| steps < 0)
+        {
+            ESP_LOGI(CLOCK_TAG,"steps: %d  ,value %d\n", steps, value);
+            returnToZero();
+        }
+        else
+        {
+            step1.runPos(steps); 
+
+            while (step1.getState() > IDLE && timeOut--)
+            {
+                vTaskDelay(1000 / portTICK_PERIOD_MS);
+            }
+            // printf("timeOut: %d\n" , timeOut);
+            step1.disableMotor();
+        }
+        lastValue = value;
     }
     else
     {
-        step1.runPos(steps); 
+
     }
 
-    while (step1.getState() != IDLE && timeOut--)
-    {
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-    }
-   // printf("timeOut: %d\n" , timeOut);
-    step1.disableMotor();
+
+
 }
 
 void K_clock::runPos(int16_t value)
 {
+    static uint16_t lastValue = 0;
     uint16_t timeOut = 200;
-    step1.runPos(value); 
 
-    while (step1.getState() != IDLE && timeOut--)
+    if(lastValue != value)
     {
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        step1.runPos(value); 
+        while (step1.getState() != IDLE && timeOut--)
+        {
+            vTaskDelay(1000 / portTICK_PERIOD_MS);
+        }
+    // printf("timeOut: %d\n" , timeOut);
+        step1.disableMotor();
+        lastValue = value;
     }
-   // printf("timeOut: %d\n" , timeOut);
+    else
+    {
+
+    }
+   
+}
+
+void K_clock::runInf(int16_t value)
+{
+    uint16_t timeOut = 200;
+    step1.runInf(1); 
+
+    vTaskDelay(value / portTICK_PERIOD_MS);
+    step1.stop();
     step1.disableMotor();
 }
+
 
 
 void K_clock::resetPos(void)
 {
     step1.resetAbsolute();
+}
+
+
+
+esp_err_t K_clock::returnToZero(void)
+{
+     uint16_t timeOut = 50;
+   
+    step1.resetAbsolute();
+    ESP_LOGI(CLOCK_TAG, "Return to zero");
+    Button_process();
+    while (!Button_getItemData(BUTTON_RESTBTN)->status && (step1.getPosition()<= (step1.getStepsPerRot()+ conf.compensation)))
+    {
+        Button_process();
+        step1.runPos(100);  
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+        //ESP_LOGI(CLOCK_TAG, "Position:%lld\n",step2.getPosition());
+
+    } 
+
+    // ESP_LOGI(CLOCK_TAG, "Position:%lld\n",step2.getPosition());
+    step1.stop();
+
+    if(step1.getPosition() <= (step1.getStepsPerRot()+ conf.compensation))
+    {
+        step1.runPos(conf.compensation); 
+
+        while (step1.getState() > IDLE && timeOut--)
+        {
+            vTaskDelay(1000 / portTICK_PERIOD_MS);
+        }     
+        step1.disableMotor();   
+        step1.resetAbsolute();
+
+        ESP_LOGI(CLOCK_TAG, "Return to zero");
+        return ESP_OK;
+    }
+    else
+    {        
+        ESP_LOGI(CLOCK_TAG, "Cannot return to zero!!");
+        return ESP_ERR_TIMEOUT;
+    }
+
 }
 
 
@@ -500,22 +528,66 @@ void K_clock::powerOFF(void)
 }
 
 
-void K_clock::config(Clock_config_t *config)
+
+
+/* Private functions ---------------------------------------------------------*/
+
+void K_clock:: wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
 {
-    memcpy(&conf, config, sizeof(conf));
+	if(event_base == WIFI_EVENT)
+    {
+		wifi_event_sta_connected_t *wifi_sta_event = (wifi_event_sta_connected_t*) event_data;
+		switch(event_id)
+        {
+			case WIFI_EVENT_STA_START:       
+				ESP_LOGI(CLOCK_TAG, "connect to AP......");
+				esp_wifi_connect();
+				break;
+
+			case WIFI_EVENT_STA_CONNECTED:
+                ESP_LOGI(CLOCK_TAG,"Connected to the Wifi Successful & Tiggle Special Event\n");
+                ESP_LOGI(CLOCK_TAG,"Event_base:%s\n",event_base);
+                ESP_LOGI(CLOCK_TAG,"Event Id:%d\n",event_id);
+                ESP_LOGI(CLOCK_TAG,"Wifi SSID:%.13s\n" , wifi_sta_event->ssid);
+                ESP_LOGI(CLOCK_TAG,"Wifi Channel:%d\n" , wifi_sta_event->channel);
+				break;
+
+			case WIFI_EVENT_STA_DISCONNECTED:
+                ESP_LOGI(CLOCK_TAG, "retry to connect to AP...... ");
+                esp_wifi_connect();
+				break;
+
+			default:
+				break;           
+		}
+	}else if(event_base ==  IP_EVENT)
+    {
+		ip_event_got_ip_t* ip_event = (ip_event_got_ip_t*) event_data;
+		if(event_id == IP_EVENT_STA_GOT_IP)
+        {
+			ESP_LOGI(CLOCK_TAG, "got ip:" IPSTR, IP2STR(&ip_event->ip_info.ip));
+
+		}
+	}
+}
+
+esp_err_t K_clock::esp_event_handler(void *ctx, system_event_t *event)
+{
+    return ESP_OK;
 }
 
 
-
-void K_clock::init(void)
+void K_clock::sntpcallback(struct timeval *tv)
 {
-    powerON();
-    wifiConnect();
-    Button_init(10);
-    motorInit();
-    returnToZero();
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    sntpInit();
-    printf("Hour %d , weatherCode %d\n",getTimeHour(), getWeatherCode());
-
+	if(sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED)
+	{
+		 xEventGroupSetBits(clock_event_group, BIT0);
+	
+	}
+	else
+	{
+		printf("Sntp Auto Sync Fail\n");
+	}
 }
+
+

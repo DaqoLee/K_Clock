@@ -4,6 +4,7 @@
 #include "esp_system.h"
 #include "esp_event.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 
 #include "nvs_flash.h"
 #include "driver/gpio.h"
@@ -30,13 +31,11 @@ EventGroupHandle_t clock_event_group;
 
 void ButtonTask(void *arg)
 {
+    uint16_t timeInterval = 0;
     Button_init(10);
     while (1)
     {
-
         Button_process();
-        /* code */
-       // printf("SendTask: i=%d\n",i++);
         if(Button_getItemData(BUTTON_USERBTN)->longPressedJump)
         {
             xEventGroupSetBits(clock_event_group, BIT2);
@@ -47,12 +46,7 @@ void ButtonTask(void *arg)
             xEventGroupSetBits(clock_event_group, BIT1);
             printf("BUTTON_USERBTN releaseJump\n");
         }
-
-        if(Button_getItemData(BUTTON_RESTBTN)->pressedJump)
-        {
-            xEventGroupSetBits(clock_event_group, BIT3);
-            printf("BUTTON_RESTBTN pressedJump\n");
-        }    
+  
        // printf("ButtonTask\n");
         vTaskDelay(10/portTICK_PERIOD_MS);
     }
@@ -62,7 +56,6 @@ void ButtonTask(void *arg)
 void ClockTask(void *arg)
 {
     EventBits_t uxBits;
-
     Clock_config_t clockConfig = {
         .wifiConfig = {
             .sta = {
@@ -79,8 +72,9 @@ void ClockTask(void *arg)
 
         .powerPin = GPIO_NUM_4,
         .pages = 24,
-        .ntpInterval = 30,
-
+        .ntpInterval = 30,//网络校准时间间隔/分钟
+        .speed = 2000,
+        .compensation = 1000,
         .stepperConfig = {
             .stepPin = 27,
             .dirPin = 26,
@@ -97,7 +91,10 @@ void ClockTask(void *arg)
 
     Clock1.config(&clockConfig);
     Clock1.init();
+    Clock1.runPages(Clock1.getTimeHour());
 
+
+   // vTaskDelay((60-Clock1.getTimeSec())*1000/portTICK_PERIOD_MS);
     while (1)
     {
         uxBits = xEventGroupWaitBits(
@@ -105,32 +102,28 @@ void ClockTask(void *arg)
                        BIT0 | BIT1 | BIT2,
                        pdTRUE,
                        pdFALSE,
-                       portMAX_DELAY );
+                       60000/portTICK_PERIOD_MS );//60000/portTICK_PERIOD_MS portMAX_DELAY
 
-      if(uxBits & BIT0)
-      {
-        Clock1.runPages(Clock1.getTimeHour());
-        printf("BIT0\n");
+        if(uxBits & BIT0)//时间校准事件
+        {
+            //Clock1.runPages(Clock1.getWeatherCode());
+            //Clock1.runPages(Clock1.getTimeHour());
         
-      }
-      else if (uxBits & BIT1)
-      {
-        printf("BIT1\n");
-        Clock1.runPos(200);
-       // printf("getWeatherCode %d \n",Clock1.getWeatherCode());
-      }
-      else if (uxBits & BIT2)
-      {    
-        printf("BIT2 powerOFF \n");
-        Clock1.powerOFF();
-      }
-      else if (uxBits & BIT3)
-      {
-        
-        // printf("BIT3 resetPos \n");
-        // Clock1.resetPos();
-      }
-        vTaskDelay(10/portTICK_PERIOD_MS);
+        }
+        else if (uxBits & BIT1)//按键短按跳变/松开
+        {
+            Clock1.runInf(200);
+        // printf("getWeatherCode %d \n",Clock1.getWeatherCode());
+        }
+        else if (uxBits & BIT2)//按键长按
+        {    
+            Clock1.powerOFF();
+        }
+        else //最大等待时间
+        {     
+            Clock1.runPages(Clock1.getTimeHour());
+        }
+        //    vTaskDelay(10/portTICK_PERIOD_MS);
     }
     
 }
@@ -150,5 +143,10 @@ extern "C" void app_main(void)
     {
         
     }
+
 }
+
+
+
+
 
