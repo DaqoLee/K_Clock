@@ -84,15 +84,15 @@ void ClockTask(void *arg)
             .timer_group = TIMER_GROUP_0,
             .timer_idx = TIMER_1,
             .miStep = MICROSTEP_16,
-            .stepAngle = 0.086
+            .stepAngle = 0.086//0.086 0.12
         }
 
     };
 
     Clock1.config(&clockConfig);
     Clock1.init();
-    Clock1.runPages(Clock1.getTimeHour());
-
+    //Clock1.runPages(Clock1.getTimeHour());
+    Clock1.runPages(Clock1.getWeatherCode());
 
    // vTaskDelay((60-Clock1.getTimeSec())*1000/portTICK_PERIOD_MS);
     while (1)
@@ -106,7 +106,8 @@ void ClockTask(void *arg)
 
         if(uxBits & BIT0)//时间校准事件
         {
-            //Clock1.runPages(Clock1.getWeatherCode());
+            Clock1.getTimeHour();
+            Clock1.runPages(Clock1.getWeatherCode());
             //Clock1.runPages(Clock1.getTimeHour());
         
         }
@@ -121,7 +122,7 @@ void ClockTask(void *arg)
         }
         else //最大等待时间
         {     
-            Clock1.runPages(Clock1.getTimeHour());
+          //  Clock1.runPages(Clock1.getTimeHour());
         }
         //    vTaskDelay(10/portTICK_PERIOD_MS);
     }

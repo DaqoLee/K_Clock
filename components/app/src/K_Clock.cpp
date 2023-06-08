@@ -287,7 +287,7 @@ void K_clock::weatherCodeParse(char* str ,  Weather_t* weather)
 					if(cJSON_IsString(JsonCode))
 					{
 						weather->code = atoi(JsonCode->valuestring);//((JsonCode->valuestring[0]-'0')*10 + (JsonCode->valuestring[1]-'0'));
-						ESP_LOGI(CLOCK_TAG, "code: %d \n", weather->code);
+						//ESP_LOGI(CLOCK_TAG, "code: %d \n", weather->code);
 
 					}					
 				}
@@ -343,6 +343,7 @@ uint8_t K_clock::getWeatherCode(void)
                 ESP_LOGI(CLOCK_TAG,"data:%s", output_buffer);
                 esp_http_client_close(client);	
                 weatherCodeParse(output_buffer, &Weather);
+                ESP_LOGI(CLOCK_TAG, "Weather code: %d \n", weatherCodeSwitch(Weather.code));
 				return weatherCodeSwitch(Weather.code);
             }
 			else 
@@ -409,6 +410,9 @@ void K_clock::runPages(int16_t value)
         {
             ESP_LOGI(CLOCK_TAG,"steps: %d  ,value %d\n", steps, value);
             returnToZero();
+
+            steps = (step1.getStepsPerRot()/conf.pages)*value - step1.getPosition();
+            step1.runPos(steps); 
         }
         else
         {
