@@ -57,6 +57,9 @@ extern "C" {
 /* Includes ------------------------------------------------------------------*/
 
 /* Defines -------------------------------------------------------------------*/
+#define SNTP_BIT BIT0
+#define BTNJUMP_BIT BIT1
+#define BTNLONG_BIT BIT2
 
 /* Exported types ------------------------------------------------------------*/
 
@@ -185,11 +188,13 @@ public:
   uint8_t getTimeSec(void);
 
   uint8_t getWeatherCode(void);
+
+  uint8_t getState(void);
   void weatherCodeParse(char* str, Weather_t* weather);
   uint8_t weatherCodeSwitch(uint8_t weatherCode);
   void setupdateFlag(uint8_t flag);
   uint8_t getupdateFlag(void);
-  esp_err_t returnToZero(void);
+  esp_err_t zeroing(void);
   void runPages(int16_t value);
   void runPos(int16_t value);
   void runInf(int16_t value);

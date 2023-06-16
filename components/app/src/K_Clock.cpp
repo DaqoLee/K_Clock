@@ -53,10 +53,10 @@ void K_clock::init(void)
     wifiConnect();
     Button_init(10);
     motorInit();
-    returnToZero();
+    zeroing();
     vTaskDelay(1000 / portTICK_PERIOD_MS);
     sntpInit();
-    ESP_LOGI(CLOCK_TAG,"Hour %d , weatherCode %d\n",getTimeHour(), getWeatherCode());
+   // ESP_LOGI(CLOCK_TAG,"Hour %d , weatherCode %d\n",getTimeHour(), getWeatherCode());
 
 }
 
@@ -357,6 +357,13 @@ uint8_t K_clock::getWeatherCode(void)
     
 }
 
+uint8_t K_clock::getState(void)
+{
+    
+    return step1.getState();
+}
+
+
 
 uint8_t K_clock::getTimeHour(void)
 {
@@ -409,7 +416,7 @@ void K_clock::runPages(int16_t value)
         if(value == 0|| steps < 0)
         {
             ESP_LOGI(CLOCK_TAG,"steps: %d  ,value %d\n", steps, value);
-            returnToZero();
+            zeroing();
 
             steps = (step1.getStepsPerRot()/conf.pages)*value - step1.getPosition();
             step1.runPos(steps); 
@@ -478,17 +485,18 @@ void K_clock::resetPos(void)
 
 
 
-esp_err_t K_clock::returnToZero(void)
+esp_err_t K_clock::zeroing(void)//zeroing
 {
-     uint16_t timeOut = 50;
+     uint16_t timeOut = 60;
    
     step1.resetAbsolute();
-    ESP_LOGI(CLOCK_TAG, "Return to zero");
+    ESP_LOGI(CLOCK_TAG, "zeroing");
     Button_process();
+    //step1.runPos((step1.getStepsPerRot()+ conf.compensation)); 
     while (!Button_getItemData(BUTTON_RESTBTN)->status && (step1.getPosition()<= (step1.getStepsPerRot()+ conf.compensation)))
     {
         Button_process();
-        step1.runPos(100);  
+        step1.runPos(200); 
         vTaskDelay(10 / portTICK_PERIOD_MS);
         //ESP_LOGI(CLOCK_TAG, "Position:%lld\n",step2.getPosition());
 
@@ -508,7 +516,7 @@ esp_err_t K_clock::returnToZero(void)
         step1.disableMotor();   
         step1.resetAbsolute();
 
-        ESP_LOGI(CLOCK_TAG, "Return to zero");
+        ESP_LOGI(CLOCK_TAG, "end of zeroing");
         return ESP_OK;
     }
     else
@@ -558,7 +566,7 @@ void K_clock:: wifi_event_handler(void* arg, esp_event_base_t event_base, int32_
 
 			case WIFI_EVENT_STA_DISCONNECTED:
                 ESP_LOGI(CLOCK_TAG, "retry to connect to AP...... ");
-                esp_wifi_connect();
+                //esp_wifi_connect();
 				break;
 
 			default:
@@ -585,7 +593,7 @@ void K_clock::sntpcallback(struct timeval *tv)
 {
 	if(sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED)
 	{
-		 xEventGroupSetBits(clock_event_group, BIT0);
+		 xEventGroupSetBits(clock_event_group, SNTP_BIT);
 	
 	}
 	else
