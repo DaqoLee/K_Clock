@@ -1,0 +1,6 @@
+source "D:/Espressif/frameworks/esp-idf-v4.4.4/components/app_update/Kconfig.projbuild"
+source "D:/Espressif/frameworks/esp-idf-v4.4.4/components/bootloader/Kconfig.projbuild"
+source "D:/Espressif/frameworks/esp-idf-v4.4.4/components/esp_rom/Kconfig.projbuild"
+source "D:/Espressif/frameworks/esp-idf-v4.4.4/components/esptool_py/Kconfig.projbuild"
+source "D:/Espressif/frameworks/esp-idf-v4.4.4/components/partition_table/Kconfig.projbuild"
+source "F:/Studio/Project/vedio/CPU/Code/K_Clock/Firmware/main/Kconfig.projbuild"
